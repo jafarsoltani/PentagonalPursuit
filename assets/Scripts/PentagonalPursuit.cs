@@ -1,71 +1,25 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class DualPentagonalPursuit2D : MonoBehaviour
+public class PentagonalPursuitCurve : MonoBehaviour
 {
-    public int iterations = 500; // Number of pursuit steps
-    public float speed = 0.05f;  // Speed of movement
-    public LineRenderer linePrefab;  // Assign in Inspector
-    public GameObject pointPrefab;   // Assign a small circle sprite in Inspector
+    public int iterations = 30; // Number of pursuit steps
+    public float stepFraction = 0.05f;  // Movement fraction per step
+    public LineRenderer linePrefab; 
 
-    private List<Vector2> innerPoints = new List<Vector2>(); // Moving points
-    private List<Vector2> outerPoints = new List<Vector2>(); // Fixed outer pentagon
-    private List<GameObject> innerMarkers = new List<GameObject>();
-    private List<GameObject> outerMarkers = new List<GameObject>();
-    private List<LineRenderer> pursuitLines = new List<LineRenderer>();
-    private List<LineRenderer> connectionLines = new List<LineRenderer>();
-    private LineRenderer outerPentagonLine; // Line connecting outer points
+    private List<Vector2> points = new List<Vector2>(); 
+    private List<LineRenderer> lines = new List<LineRenderer>();
 
     void Start()
     {
-        float innerRadius = 3f;  // Radius of inner pentagon
-        float outerRadius = 6f;  // Radius of outer pentagon
-
-        outerPentagonLine = Instantiate(linePrefab, transform);
-        outerPentagonLine.positionCount = 6; // 5 points + closing back to start
-        SetGradient(outerPentagonLine, Color.red, Color.yellow); // Colour Gradient
-
+        float radius = 5f;  // Initial pentagon size
+        
         for (int i = 0; i < 5; i++)
         {
-            float angle = i * Mathf.PI * 2 / 5;  // Angle of each vertex
-
-            // Define Outer Pentagon (Static)
-            Vector2 outerPos = new Vector2(Mathf.Cos(angle) * outerRadius, Mathf.Sin(angle) * outerRadius);
-            outerPoints.Add(outerPos);
-
-            GameObject outerMarker = Instantiate(pointPrefab, outerPos, Quaternion.identity);
-            outerMarkers.Add(outerMarker);
-
-            // Define Inner Pentagon (Initial positions)
-            Vector2 innerPos = new Vector2(Mathf.Cos(angle) * innerRadius, Mathf.Sin(angle) * innerRadius);
-            innerPoints.Add(innerPos);
-
-            GameObject innerMarker = Instantiate(pointPrefab, innerPos, Quaternion.identity);
-            innerMarkers.Add(innerMarker);
-
-            // Create LineRenderers for pursuit paths
-            LineRenderer pursuitLine = Instantiate(linePrefab, transform);
-            pursuitLine.positionCount = 1;
-            pursuitLine.SetPosition(0, innerPos);
-            SetGradient(pursuitLine, Color.blue, Color.cyan);
-            pursuitLines.Add(pursuitLine);
-
-            // Create LineRenderers for outer-inner connections
-            LineRenderer connectionLine = Instantiate(linePrefab, transform);
-            connectionLine.positionCount = 2;
-            connectionLine.SetPosition(0, outerPos);
-            connectionLine.SetPosition(1, innerPos);
-            SetGradient(connectionLine, Color.green, Color.magenta);
-            connectionLines.Add(connectionLine);
+            float angle = i * Mathf.PI * 2 / 5;
+            points.Add(new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius));
         }
-
-        // Close the outer pentagon by looping back to the first point
-        for (int i = 0; i < 5; i++)
-        {
-            outerPentagonLine.SetPosition(i, new Vector3(outerPoints[i].x, outerPoints[i].y, 0));
-        }
-        outerPentagonLine.SetPosition(5, new Vector3(outerPoints[0].x, outerPoints[0].y, 0)); // Close shape
-
+        
         StartCoroutine(DrawPursuitCurve());
     }
 
@@ -73,40 +27,51 @@ public class DualPentagonalPursuit2D : MonoBehaviour
     {
         for (int step = 0; step < iterations; step++)
         {
-            List<Vector2> newInnerPoints = new List<Vector2>();
+            List<Vector2> newPoints = new List<Vector2>();
 
             for (int i = 0; i < 5; i++)
             {
-                Vector2 start = innerPoints[i];
-                Vector2 target = innerPoints[(i + 1) % 5]; // Chase next point
-                Vector2 newPosition = Vector2.Lerp(start, target, speed);
-                newInnerPoints.Add(newPosition);
-
-                // Update inner markers
-                innerMarkers[i].transform.position = new Vector3(newPosition.x, newPosition.y, 0);
-
-                // Update pursuit path
-                pursuitLines[i].positionCount++;
-                pursuitLines[i].SetPosition(pursuitLines[i].positionCount - 1, new Vector3(newPosition.x, newPosition.y, 0));
-
-                // Update outer-inner connection lines
-                connectionLines[i].SetPosition(1, new Vector3(newPosition.x, newPosition.y, 0));
+                Vector2 start = points[i];
+                Vector2 target = points[(i + 1) % 5];
+                Vector2 newPosition = Vector2.Lerp(start, target, stepFraction);
+                newPoints.Add(newPosition);
             }
-
-            innerPoints = newInnerPoints;
-            yield return new WaitForSeconds(0.02f);
+            
+            DrawPentagon(newPoints);
+            
+            points = newPoints;
+            yield return new WaitForSeconds(0.05f);
         }
     }
+    
+    void DrawPentagon(List<Vector2> vertices)
+    {
+        LineRenderer line = Instantiate(linePrefab, transform);
+        line.positionCount = 6; // 5 sides + closing edge
+        for (int i = 0; i < 5; i++)
+        {
+            line.SetPosition(i, new Vector3(vertices[i].x, vertices[i].y, 0));
+        }
+        line.SetPosition(5, new Vector3(vertices[0].x, vertices[0].y, 0)); // Close the shape
+        SetGradient(line, Color.red, Color.yellow);
+    }
 
-    // Function to Apply a Colour Gradient to LineRenderers
+    // Applies a color gradient to a LineRenderer
     void SetGradient(LineRenderer line, Color startColor, Color endColor)
     {
         Gradient gradient = new Gradient();
         gradient.SetKeys(
-            new GradientColorKey[] { new GradientColorKey(startColor, 0f), new GradientColorKey(endColor, 1f) },
-            new GradientAlphaKey[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(1f, 1f) }
+            new GradientColorKey[] {
+                new GradientColorKey(startColor, 0f),
+                new GradientColorKey(endColor, 1f)
+            },
+            new GradientAlphaKey[] {
+                new GradientAlphaKey(1f, 0f),
+                new GradientAlphaKey(1f, 1f)
+            }
         );
 
         line.colorGradient = gradient;
+        line.material = new Material(Shader.Find("Sprites/Default")); 
     }
 }
